@@ -1,0 +1,64 @@
+flowchart LR
+    %% ================= Client Layer =================
+    subgraph CLIENT_LAYER["Client Layer"]
+        WEB["Web App<br/>(React)"]
+        MOB["Mobile App<br/>(Android / iOS)"]
+    end
+
+    %% ================= API Gateway =================
+    GW["API Gateway<br/><b>Single Entry Point</b><br/>routing · auth · rate limiting"]
+
+    %% ================= Microservices =================
+    subgraph SERVICES["HRIS Microservices — database per service"]
+        EMP["<b>employee-service</b><br/>BC 1: Employee Records"]
+        PAY["<b>payroll-service</b><br/>BC 2: Payroll"]
+        LEA["<b>leave-service</b><br/>BC 3: Leave Management"]
+    end
+
+    %% ================= Databases =================
+    subgraph DATA["Private Databases"]
+        EMPDB[("employee_db<br/>PostgreSQL")]
+        PAYDB[("payroll_db<br/>PostgreSQL")]
+        LEADB[("leave_db<br/>PostgreSQL")]
+    end
+
+    %% ================= Message Broker =================
+    MQ{{"<b>Message Broker</b><br/>RabbitMQ / Kafka<br/>topic: hris.events"}}
+
+    %% ---------- SYNC: Client to Gateway ----------
+    WEB -->|"SYNC · HTTPS/REST"| GW
+    MOB -->|"SYNC · HTTPS/REST"| GW
+
+    %% ---------- SYNC: Gateway to Services ----------
+    GW -->|"SYNC · REST<br/>/api/employees"| EMP
+    GW -->|"SYNC · REST<br/>/api/payroll"| PAY
+    GW -->|"SYNC · REST<br/>/api/leaves"| LEA
+
+    %% ---------- SYNC: Service to its own database ----------
+    EMP -->|"SYNC · SQL"| EMPDB
+    PAY -->|"SYNC · SQL"| PAYDB
+    LEA -->|"SYNC · SQL"| LEADB
+
+    %% ---------- SYNC: Service to Service ----------
+    PAY -->|"SYNC · REST<br/>GET /employees/:id"| EMP
+    LEA -->|"SYNC · REST<br/>GET /employees/:id"| EMP
+
+    %% ---------- ASYNC: Publish / Subscribe ----------
+    EMP -.->|"ASYNC pub · EmployeeHired<br/>EmployeeTerminated"| MQ
+    LEA -.->|"ASYNC pub · LeaveApproved<br/>LeaveCancelled"| MQ
+    PAY -.->|"ASYNC pub · PayrollProcessed"| MQ
+    MQ -.->|"ASYNC sub · Employee*<br/>Leave*"| PAY
+    MQ -.->|"ASYNC sub · Employee*"| LEA
+
+    %% ================= Styling =================
+    classDef client fill:#DBEAFE,stroke:#1E40AF,stroke-width:2px,color:#111827
+    classDef gateway fill:#FDE68A,stroke:#B45309,stroke-width:3px,color:#111827
+    classDef service fill:#D1FAE5,stroke:#047857,stroke-width:2px,color:#111827
+    classDef database fill:#EDE9FE,stroke:#6D28D9,stroke-width:2px,color:#111827
+    classDef broker fill:#FECACA,stroke:#B91C1C,stroke-width:3px,color:#111827
+
+    class WEB,MOB client
+    class GW gateway
+    class EMP,PAY,LEA service
+    class EMPDB,PAYDB,LEADB database
+    class MQ broker
